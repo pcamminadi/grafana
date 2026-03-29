@@ -77,8 +77,12 @@ export const DashboardInteractions = {
 
   // grafana_dashboards_outline_item_clicked
   // when a user clicks on an element of the outline
-  outlineItemClicked: (properties: { index: number; depth: number }) => {
-    reportDashboardInteraction('outline_item_clicked', properties);
+  outlineItemClicked: (props: { index: number; depth: number; isEditing?: boolean }) => {
+    reportDashboardInteraction('outline_item_clicked', {
+      index: props.index,
+      depth: props.depth,
+      mode: props.isEditing ? 'edit' : 'view',
+    });
   },
 
   // dashboards_add_variable_button_clicked
@@ -95,6 +99,12 @@ export const DashboardInteractions = {
   // when a user selects a variable type when creating a new variable
   newVariableTypeSelected: (properties: { type: string }) => {
     reportDashboardInteraction('new_variable_type_selected', properties);
+  },
+
+  // dashboards_new_section_variable_type_selected
+  // when a user selects a variable type when creating a new section (row/tab) variable
+  newSectionVariableTypeSelected: (properties: { type: string }) => {
+    reportDashboardInteraction('new_section_variable_type_selected', properties);
   },
 
   // dashboards_delete_variable_button_clicked

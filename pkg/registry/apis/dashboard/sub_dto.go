@@ -12,7 +12,7 @@ import (
 	authlib "github.com/grafana/authlib/types"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana/apps/dashboard/pkg/apis/dashboard"
-	dashv1 "github.com/grafana/grafana/apps/dashboard/pkg/apis/dashboard/v1beta1"
+	dashv1 "github.com/grafana/grafana/apps/dashboard/pkg/apis/dashboard/v1"
 	"github.com/grafana/grafana/pkg/apimachinery/identity"
 	"github.com/grafana/grafana/pkg/apimachinery/utils"
 	"github.com/grafana/grafana/pkg/infra/slugify"
@@ -242,8 +242,12 @@ func (r *DTOConnector) Connect(ctx context.Context, name string, opts runtime.Ob
 		orgAnnotationActions.CanDelete = dashboardAnnotationActions.CanDelete
 
 		access.AnnotationsPermissions = &dashboard.AnnotationPermission{
+<<<<<<< HEAD
 			Dashboard:    dashboardAnnotationActions,
 			Organization: orgAnnotationActions,
+=======
+			Dashboard: dashboard.AnnotationActions{CanAdd: writeRes.Allowed, CanEdit: writeRes.Allowed, CanDelete: writeRes.Allowed},
+>>>>>>> origin/main
 		}
 
 		title := obj.FindTitle("")
