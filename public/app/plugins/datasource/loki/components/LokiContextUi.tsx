@@ -2,7 +2,7 @@ import { css } from '@emotion/css';
 import { useRef, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAsync } from 'react-use';
 
-import { dateTime, GrafanaTheme2, LogRowModel, renderMarkdown, SelectableValue } from '@grafana/data';
+import { dateTime, GrafanaTheme2, LogRowModel, renderMarkdown, SelectableValue, urlUtil } from '@grafana/data';
 import { RawQuery } from '@grafana/plugin-ui';
 import { reportInteraction } from '@grafana/runtime';
 import {
@@ -14,6 +14,7 @@ import {
   InlineFieldRow,
   InlineSwitch,
   Label,
+  LinkButton,
   MultiSelect,
   RenderUserContentAsHTML,
   Spinner,
@@ -116,7 +117,11 @@ function getStyles(theme: GrafanaTheme2) {
         },
       },
     }),
-    crossStreamWarning: css({
+    crossStreamWarningIcon: css({
+      color: theme.colors.warning.text,
+      marginLeft: theme.spacing(1),
+    }),
+    openInExplore: css({
       marginTop: theme.spacing(1),
     }),
   };
@@ -469,67 +474,88 @@ export function LokiContextUi(props: LokiContextUiProps) {
             </InlineFieldRow>
           )}
           {crossStreamContextEnabled && (
-            <>
-              <InlineFieldRow className={styles.crossStreamToggle}>
-                <InlineField
-                  label="Show context from all streams"
-                  tooltip="Show log lines from ALL streams around the selected timestamp (Kibana-style surrounding documents). This replaces all label filters with a broad regex match."
-                >
-                  <InlineSwitch
-                    value={allStreamsMode}
-                    showLabel={true}
-                    transparent={true}
-                    onChange={(e) => {
-                      const enabled = e.currentTarget.checked;
-                      reportInteraction('grafana_explore_logs_loki_log_context_cross_stream_toggled', {
-                        logRowUid: row.uid,
-                        action: enabled ? 'enable' : 'disable',
-                      });
+            <InlineFieldRow className={styles.crossStreamToggle}>
+              <InlineField
+                label="Show context from all streams"
+                tooltip="Show log lines from ALL streams around the selected timestamp (Kibana-style surrounding documents). This replaces all label filters with a broad regex match."
+              >
+                <InlineSwitch
+                  value={allStreamsMode}
+                  showLabel={true}
+                  transparent={true}
+                  onChange={(e) => {
+                    const enabled = e.currentTarget.checked;
+                    reportInteraction('grafana_explore_logs_loki_log_context_cross_stream_toggled', {
+                      logRowUid: row.uid,
+                      action: enabled ? 'enable' : 'disable',
+                    });
 
-                      if (enabled) {
-                        // Save current filters so we can restore them later
-                        filtersBeforeAllStreams.current = structuredClone(contextFilters);
+                    if (enabled) {
+                      // Save current filters so we can restore them later
+                      filtersBeforeAllStreams.current = structuredClone(contextFilters);
 
-                        // Find the first real (indexed) label to use as the broad regex matcher
-                        const firstRealLabel = contextFilters.find(({ nonIndexed }) => !nonIndexed);
-                        if (firstRealLabel) {
-                          setContextFilters(
-                            contextFilters.map((filter) => {
-                              if (filter.nonIndexed) {
-                                return { ...filter, enabled: false };
-                              }
-                              if (filter.label === firstRealLabel.label) {
-                                return { ...filter, enabled: true, operator: '=~' as ContextFilterOperator, value: '.+' };
-                              }
+                      // Find the first real (indexed) label to use as the broad regex matcher
+                      const firstRealLabel = contextFilters.find(({ nonIndexed }) => !nonIndexed);
+                      if (firstRealLabel) {
+                        setContextFilters(
+                          contextFilters.map((filter) => {
+                            if (filter.nonIndexed) {
                               return { ...filter, enabled: false };
-                            })
-                          );
-                        }
-                      } else {
-                        // Restore the filters from before all-streams mode was enabled
-                        if (filtersBeforeAllStreams.current.length > 0) {
-                          setContextFilters(filtersBeforeAllStreams.current);
-                          filtersBeforeAllStreams.current = [];
-                        }
+                            }
+                            if (filter.label === firstRealLabel.label) {
+                              return { ...filter, enabled: true, operator: '=~' as ContextFilterOperator, value: '.+' };
+                            }
+                            return { ...filter, enabled: false };
+                          })
+                        );
                       }
+                    } else {
+                      // Restore the filters from before all-streams mode was enabled
+                      if (filtersBeforeAllStreams.current.length > 0) {
+                        setContextFilters(filtersBeforeAllStreams.current);
+                        filtersBeforeAllStreams.current = [];
+                      }
+                    }
 
-                      setAllStreamsMode(enabled);
-                    }}
-                  />
-                </InlineField>
-              </InlineFieldRow>
+                    setAllStreamsMode(enabled);
+                  }}
+                />
+              </InlineField>
               {allStreamsMode && (
-                <Alert
-                  className={styles.crossStreamWarning}
-                  title="Cross-stream context queries can be expensive"
-                  severity="warning"
+                <Tooltip
+                  content="Cross-stream queries scan ALL log streams around the selected timestamp. This may cause slow queries, high resource usage, and increased costs on large Loki installations."
                 >
-                  This query matches ALL log streams around the selected timestamp. On large Loki installations, this may
-                  result in slow queries, high resource usage, and increased costs due to full-scan operations. Consider
-                  narrowing the time window if results are slow.
-                </Alert>
+                  <Icon name="exclamation-triangle" size="md" className={styles.crossStreamWarningIcon} />
+                </Tooltip>
               )}
-            </>
+            </InlineFieldRow>
+          )}
+          {allStreamsMode && (
+            <div className={styles.openInExplore}>
+              <LinkButton
+                variant="secondary"
+                size="sm"
+                icon="compass"
+                href={urlUtil.renderUrl('/explore', {
+                  left: JSON.stringify({
+                    datasource: logContextProvider.datasource.uid,
+                    queries: [{ refId: 'context', expr: queryExpr, queryType: 'range' }],
+                    range: {
+                      from: String(row.timeEpochMs - 2 * 60 * 60 * 1000),
+                      to: String(row.timeEpochMs + 2 * 60 * 60 * 1000),
+                    },
+                  }),
+                })}
+                target="_blank"
+                onClick={() => {
+                  reportInteraction('grafana_explore_logs_loki_log_context_open_in_explore', {
+                    logRowUid: row.uid,
+                  });
+                }}
+              >
+                Open in Explore
+              </LinkButton>
+            </div>
           )}
         </div>
       </Collapse>
