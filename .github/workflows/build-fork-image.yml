@@ -3,7 +3,7 @@ name: Build fork image
 on:
   push:
     branches:
-      - 'feat/**'
+      - 'build/**'
   workflow_dispatch:
 
 permissions:
@@ -26,14 +26,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build Grafana from source
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          load: true
+          tags: grafana-source:local
           build-args: |
             COMMIT_SHA=${{ github.sha }}
             BUILD_BRANCH=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build CI image with plugins
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.ci
+          push: true
+          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          build-contexts: |
+            grafana-source=docker-image://grafana-source:local
