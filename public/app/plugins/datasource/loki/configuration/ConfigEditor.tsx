@@ -32,6 +32,7 @@ const makeJsonUpdater =
 
 const setMaxLines = makeJsonUpdater('maxLines');
 const setDerivedFields = makeJsonUpdater('derivedFields');
+const setCrossStreamContext = makeJsonUpdater('enableCrossStreamContext');
 
 export const ConfigEditor = (props: Props) => {
   const { options, onOptionsChange } = props;
@@ -67,6 +68,8 @@ export const ConfigEditor = (props: Props) => {
           <QuerySettings
             maxLines={options.jsonData.maxLines || ''}
             onMaxLinedChange={(value) => onOptionsChange(setMaxLines(options, value))}
+            enableCrossStreamContext={options.jsonData.enableCrossStreamContext || false}
+            onCrossStreamContextChange={(value) => onOptionsChange(setCrossStreamContext(options, value))}
           />
           <DerivedFields
             fields={options.jsonData.derivedFields}

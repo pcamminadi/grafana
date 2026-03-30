@@ -38,6 +38,7 @@ export interface LokiOptions extends DataSourceJsonData {
   derivedFields?: DerivedFieldConfig[];
   alertmanager?: string;
   keepCookies?: string[];
+  enableCrossStreamContext?: boolean;
 }
 
 export interface LokiStreamResult {
@@ -83,11 +84,14 @@ export interface QueryStats {
   message?: string;
 }
 
+export type ContextFilterOperator = '=' | '=~' | '!=' | '!~';
+
 export interface ContextFilter {
   enabled: boolean;
   label: string;
   value: string;
   nonIndexed: boolean;
+  operator?: ContextFilterOperator;
 }
 
 export interface ParserAndLabelKeysResult {

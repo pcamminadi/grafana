@@ -60,6 +60,7 @@ const mockLogContextProvider = {
     .mockImplementation((currentExpr: string, query: LokiQuery | undefined) => `${currentExpr} | newOperation`),
   getLogRowContext: jest.fn(),
   queryContainsValidPipelineStages: jest.fn().mockReturnValue(true),
+  isCrossStreamContextEnabled: jest.fn().mockReturnValue(false),
   prepareExpression: jest.fn().mockImplementation(
     (contextFilters: ContextFilter[], query: LokiQuery | undefined) =>
       `{${contextFilters
@@ -358,6 +359,49 @@ describe('LokiContextUi', () => {
     render(<LokiContextUi {...props} />);
     await waitFor(() => {
       expect(screen.queryByText('Previously used filters have been applied.')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('cross-stream context', () => {
+    it('does not show cross-stream toggle when feature is disabled', async () => {
+      const props = setupProps();
+      (props.logContextProvider.isCrossStreamContextEnabled as jest.Mock).mockReturnValue(false);
+      render(<LokiContextUi {...props} />);
+      await waitFor(() => {
+        expect(props.logContextProvider.getInitContextFilters).toHaveBeenCalled();
+      });
+      expect(screen.queryByText('Show context from all streams')).not.toBeInTheDocument();
+    });
+
+    it('shows cross-stream toggle when feature is enabled', async () => {
+      const props = setupProps();
+      (props.logContextProvider.isCrossStreamContextEnabled as jest.Mock).mockReturnValue(true);
+      render(<LokiContextUi {...props} />);
+      await waitFor(() => {
+        expect(props.logContextProvider.getInitContextFilters).toHaveBeenCalled();
+      });
+      expect(screen.getByText('Show context from all streams')).toBeInTheDocument();
+    });
+
+    it('shows warning when cross-stream toggle is enabled', async () => {
+      const props = setupProps();
+      (props.logContextProvider.isCrossStreamContextEnabled as jest.Mock).mockReturnValue(true);
+      render(<LokiContextUi {...props} />);
+      await waitFor(() => {
+        expect(props.logContextProvider.getInitContextFilters).toHaveBeenCalled();
+      });
+
+      // Find the cross-stream switch (it's the second switch after pipeline operations)
+      const switches = screen.getAllByRole('switch');
+      const crossStreamSwitch = switches.find((s) => {
+        const label = s.closest('[class]')?.parentElement?.querySelector('label');
+        return label?.textContent?.includes('Show context from all streams');
+      }) ?? switches[switches.length - 1];
+
+      await userEvent.click(crossStreamSwitch);
+      await waitFor(() => {
+        expect(screen.getByText('Cross-stream context queries can be expensive')).toBeInTheDocument();
+      });
     });
   });
 });

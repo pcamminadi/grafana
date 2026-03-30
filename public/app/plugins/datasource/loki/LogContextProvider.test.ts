@@ -788,6 +788,77 @@ describe('LogContextProvider', () => {
     });
   });
 
+  describe('isCrossStreamContextEnabled', () => {
+    it('should return false by default', () => {
+      expect(logContextProvider.isCrossStreamContextEnabled()).toBe(false);
+    });
+
+    it('should return true when enableCrossStreamContext is set in jsonData', () => {
+      const templateSrv = { replace: jest.fn((str: string) => str) };
+      setTemplateSrv(templateSrv as unknown as TemplateSrv);
+      const ds = createLokiDatasource(templateSrv, {
+        jsonData: { maxLines: '20', enableCrossStreamContext: true },
+      });
+      ds.languageProvider = defaultLanguageProviderMock;
+      const provider = new LogContextProvider(ds);
+      expect(provider.isCrossStreamContextEnabled()).toBe(true);
+    });
+  });
+
+  describe('processContextFiltersToExpr with operator', () => {
+    it('should use exact match operator by default', async () => {
+      logContextProvider.cachedContextFilters = [
+        { value: 'baz', enabled: true, nonIndexed: false, label: 'bar' },
+      ];
+      const result = await logContextProvider.prepareLogRowContextQueryTarget(
+        defaultLogRow,
+        10,
+        LogRowContextQueryDirection.Backward,
+        { expr: '{bar="baz"}', refId: 'A' }
+      );
+      expect(result.query.expr).toEqual('{bar="baz"}');
+    });
+
+    it('should use regex operator when specified', async () => {
+      logContextProvider.cachedContextFilters = [
+        { value: '.+', enabled: true, nonIndexed: false, label: 'bar', operator: '=~' },
+      ];
+      const result = await logContextProvider.prepareLogRowContextQueryTarget(
+        defaultLogRow,
+        10,
+        LogRowContextQueryDirection.Backward,
+        { expr: '{bar="baz"}', refId: 'A' }
+      );
+      expect(result.query.expr).toEqual('{bar=~".+"}');
+    });
+
+    it('should not escape regex values for regex operators', async () => {
+      logContextProvider.cachedContextFilters = [
+        { value: 'foo|bar', enabled: true, nonIndexed: false, label: 'service', operator: '=~' },
+      ];
+      const result = await logContextProvider.prepareLogRowContextQueryTarget(
+        defaultLogRow,
+        10,
+        LogRowContextQueryDirection.Backward,
+        { expr: '{service="foo"}', refId: 'A' }
+      );
+      expect(result.query.expr).toEqual('{service=~"foo|bar"}');
+    });
+
+    it('should escape values for exact match operators', async () => {
+      logContextProvider.cachedContextFilters = [
+        { value: 'baz\\qux', enabled: true, nonIndexed: false, label: 'bar' },
+      ];
+      const result = await logContextProvider.prepareLogRowContextQueryTarget(
+        defaultLogRow,
+        10,
+        LogRowContextQueryDirection.Backward,
+        { expr: '{bar="baz"}', refId: 'A' }
+      );
+      expect(result.query.expr).toEqual('{bar="baz\\\\qux"}');
+    });
+  });
+
   describe('queryContainsValidPipelineStages', () => {
     it('should return true if query contains a line_format stage', () => {
       expect(

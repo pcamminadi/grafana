@@ -41,7 +41,7 @@ import {
   isQueryWithParser,
 } from './queryUtils';
 import { sortDataFrameByTime, SortDirection } from './sortDataFrame';
-import { ContextFilter, LabelType, LokiQuery } from './types';
+import { ContextFilter, LabelType, LokiOptions, LokiQuery } from './types';
 
 export const LOKI_LOG_CONTEXT_PRESERVED_LABELS = 'lokiLogContextPreservedLabels';
 export const SHOULD_INCLUDE_PIPELINE_OPERATIONS = 'lokiLogContextShouldIncludePipelineOperations';
@@ -59,6 +59,10 @@ export class LogContextProvider {
   constructor(datasource: LokiDatasource) {
     this.datasource = datasource;
     this.cachedContextFilters = [];
+  }
+
+  isCrossStreamContextEnabled(): boolean {
+    return (this.datasource.instanceSettings.jsonData as LokiOptions).enableCrossStreamContext === true;
   }
 
   private async getQueryAndRange(
@@ -249,8 +253,10 @@ export class LogContextProvider {
     const labelFilters = contextFilters
       .map((filter) => {
         if (!filter.nonIndexed && filter.enabled) {
-          // escape backslashes in label as users can't escape them by themselves
-          return `${filter.label}="${escapeLabelValueInExactSelector(filter.value)}"`;
+          const op = filter.operator || '=';
+          // For regex operators, don't escape the value (it's a user-provided pattern like ".+")
+          const value = op === '=~' || op === '!~' ? filter.value : escapeLabelValueInExactSelector(filter.value);
+          return `${filter.label}${op}"${value}"`;
         }
         return '';
       })

@@ -29,7 +29,7 @@ import {
 } from '../LogContextProvider';
 import { escapeLabelValueInSelector } from '../languageUtils';
 import { lokiGrammar } from '../syntax';
-import { ContextFilter, LokiQuery } from '../types';
+import { ContextFilter, ContextFilterOperator, LokiQuery } from '../types';
 
 export interface LokiContextUiProps {
   logContextProvider: LogContextProvider;
@@ -107,6 +107,18 @@ function getStyles(theme: GrafanaTheme2) {
         },
       },
     }),
+    crossStreamToggle: css({
+      margin: theme.spacing(2, 0, 0, 0),
+      '& > div': {
+        margin: 0,
+        '& > label': {
+          padding: 0,
+        },
+      },
+    }),
+    crossStreamWarning: css({
+      marginTop: theme.spacing(1),
+    }),
   };
 }
 
@@ -125,10 +137,14 @@ export function LokiContextUi(props: LokiContextUiProps) {
   const [includePipelineOperations, setIncludePipelineOperations] = useState(
     window.localStorage.getItem(SHOULD_INCLUDE_PIPELINE_OPERATIONS) === 'true'
   );
+  const [allStreamsMode, setAllStreamsMode] = useState(false);
 
   const timerHandle = useRef<number | undefined>(undefined);
   const previousInitialized = useRef<boolean>(false);
   const previousContextFilters = useRef<ContextFilter[]>([]);
+  const filtersBeforeAllStreams = useRef<ContextFilter[]>([]);
+
+  const crossStreamContextEnabled = logContextProvider.isCrossStreamContextEnabled();
 
   const isInitialState = useMemo(() => {
     // Initial query has all regular labels enabled and all parsed labels disabled
@@ -141,8 +157,12 @@ export function LokiContextUi(props: LokiContextUiProps) {
       return false;
     }
 
+    if (allStreamsMode) {
+      return false;
+    }
+
     return true;
-  }, [contextFilters, includePipelineOperations, initialized, logContextProvider, origQuery]);
+  }, [contextFilters, includePipelineOperations, initialized, logContextProvider, origQuery, allStreamsMode]);
 
   useEffect(() => {
     if (!initialized) {
@@ -155,7 +175,9 @@ export function LokiContextUi(props: LokiContextUiProps) {
       return;
     }
 
-    if (contextFilters.filter(({ enabled, nonIndexed }) => enabled && !nonIndexed).length === 0) {
+    // In allStreamsMode the regex filter satisfies LogQL's stream selector requirement,
+    // so we skip the "at least one real label" guard.
+    if (!allStreamsMode && contextFilters.filter(({ enabled, nonIndexed }) => enabled && !nonIndexed).length === 0) {
       setContextFilters(previousContextFilters.current);
       return;
     }
@@ -289,12 +311,15 @@ export function LokiContextUi(props: LokiContextUiProps) {
                 ...contextFilter,
                 // For revert to initial query we need to enable all labels and disable all parsed labels
                 enabled: !contextFilter.nonIndexed,
+                // Reset operator back to exact match
+                operator: '=' as ContextFilterOperator,
               }));
             });
             // We are removing the preserved labels from local storage so we can preselect the labels in the UI
             window.localStorage.removeItem(LOKI_LOG_CONTEXT_PRESERVED_LABELS);
             window.localStorage.removeItem(SHOULD_INCLUDE_PIPELINE_OPERATIONS);
             setIncludePipelineOperations(false);
+            setAllStreamsMode(false);
           }}
         />
       </div>
@@ -442,6 +467,69 @@ export function LokiContextUi(props: LokiContextUiProps) {
                 />
               </InlineField>
             </InlineFieldRow>
+          )}
+          {crossStreamContextEnabled && (
+            <>
+              <InlineFieldRow className={styles.crossStreamToggle}>
+                <InlineField
+                  label="Show context from all streams"
+                  tooltip="Show log lines from ALL streams around the selected timestamp (Kibana-style surrounding documents). This replaces all label filters with a broad regex match."
+                >
+                  <InlineSwitch
+                    value={allStreamsMode}
+                    showLabel={true}
+                    transparent={true}
+                    onChange={(e) => {
+                      const enabled = e.currentTarget.checked;
+                      reportInteraction('grafana_explore_logs_loki_log_context_cross_stream_toggled', {
+                        logRowUid: row.uid,
+                        action: enabled ? 'enable' : 'disable',
+                      });
+
+                      if (enabled) {
+                        // Save current filters so we can restore them later
+                        filtersBeforeAllStreams.current = structuredClone(contextFilters);
+
+                        // Find the first real (indexed) label to use as the broad regex matcher
+                        const firstRealLabel = contextFilters.find(({ nonIndexed }) => !nonIndexed);
+                        if (firstRealLabel) {
+                          setContextFilters(
+                            contextFilters.map((filter) => {
+                              if (filter.nonIndexed) {
+                                return { ...filter, enabled: false };
+                              }
+                              if (filter.label === firstRealLabel.label) {
+                                return { ...filter, enabled: true, operator: '=~' as ContextFilterOperator, value: '.+' };
+                              }
+                              return { ...filter, enabled: false };
+                            })
+                          );
+                        }
+                      } else {
+                        // Restore the filters from before all-streams mode was enabled
+                        if (filtersBeforeAllStreams.current.length > 0) {
+                          setContextFilters(filtersBeforeAllStreams.current);
+                          filtersBeforeAllStreams.current = [];
+                        }
+                      }
+
+                      setAllStreamsMode(enabled);
+                    }}
+                  />
+                </InlineField>
+              </InlineFieldRow>
+              {allStreamsMode && (
+                <Alert
+                  className={styles.crossStreamWarning}
+                  title="Cross-stream context queries can be expensive"
+                  severity="warning"
+                >
+                  This query matches ALL log streams around the selected timestamp. On large Loki installations, this may
+                  result in slow queries, high resource usage, and increased costs due to full-scan operations. Consider
+                  narrowing the time window if results are slow.
+                </Alert>
+              )}
+            </>
           )}
         </div>
       </Collapse>
