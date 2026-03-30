@@ -89,8 +89,8 @@ type kvStorageBackend struct {
 
 	searchLookback time.Duration
 
-	// stopCleanups cancels the context used by the runCleanups goroutine.
-	stopCleanups context.CancelFunc
+	// cancel stops all background goroutines owned by the backend.
+	cancel context.CancelFunc
 }
 
 var _ KVBackend = &kvStorageBackend{}
@@ -149,7 +149,6 @@ func getSnowflakeNode() (*snowflake.Node, error) {
 }
 
 func NewKVStorageBackend(opts KVBackendOptions) (KVBackend, error) {
-	ctx := context.Background()
 	kv := opts.KvStore
 
 	logger := opts.Log
@@ -161,6 +160,8 @@ func NewKVStorageBackend(opts KVBackendOptions) (KVBackend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snowflake node: %w", err)
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
 	eventStore := newEventStore(kv)
 
 	eventRetentionPeriod := opts.EventRetentionPeriod
@@ -201,6 +202,7 @@ func NewKVStorageBackend(opts KVBackendOptions) (KVBackend, error) {
 		garbageCollection:    garbageCollection,
 		searchLookback:       opts.SearchLookback,
 		disablePruner:        opts.DisablePruner,
+		cancel:               cancel,
 	}
 	err = backend.initPruner(ctx)
 	if err != nil {
@@ -231,9 +233,7 @@ func NewKVStorageBackend(opts KVBackendOptions) (KVBackend, error) {
 	}
 
 	// Start the cleanup background job.
-	cleanupCtx, cleanupCancel := context.WithCancel(ctx)
-	backend.stopCleanups = cleanupCancel
-	go backend.runCleanups(cleanupCtx)
+	go backend.runCleanups(ctx)
 
 	logger.Info("backend initialized", "kv", fmt.Sprintf("%T", kv))
 
@@ -254,14 +254,18 @@ func (k *kvStorageBackend) IsHealthy(ctx context.Context, _ *resourcepb.HealthCh
 
 // Stop shuts down services owned by the backend.
 func (k *kvStorageBackend) Stop() {
-	if k.stopCleanups != nil {
-		k.stopCleanups()
+	if k.historyPruner != nil {
+		k.historyPruner.Stop()
 	}
 	if k.tenantWatcher != nil {
 		k.tenantWatcher.Stop()
 	}
 	if k.tenantDeleter != nil {
 		k.tenantDeleter.Stop()
+	}
+	// Cancel the background context to stop runCleanups, GC, and other goroutines.
+	if k.cancel != nil {
+		k.cancel()
 	}
 }
 
@@ -398,7 +402,11 @@ func (b *kvStorageBackend) initGarbageCollection(ctx context.Context) error {
 	go func() {
 		// delay the first run by a random amount between 0 and the interval to avoid thundering herd
 		jitter := time.Duration(rand.Int64N(b.garbageCollection.Interval.Nanoseconds()))
-		<-time.After(jitter)
+		select {
+		case <-time.After(jitter):
+		case <-ctx.Done():
+			return
+		}
 
 		ticker := time.NewTicker(b.garbageCollection.Interval)
 		defer ticker.Stop()
