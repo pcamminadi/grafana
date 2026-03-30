@@ -48,7 +48,7 @@ export const QuerySettings = (props: Props) => {
       <InlineField
         label="Enable cross-stream log context"
         htmlFor="loki_config_enableCrossStreamContext"
-        labelWidth={22}
+        labelWidth={30}
         tooltip="When enabled, the log context modal will show a toggle that allows users to view logs from ALL streams around a selected timestamp, similar to Kibana's 'Surrounding Documents' feature."
       >
         <InlineSwitch
