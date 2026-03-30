@@ -222,5 +222,16 @@ ARG RUN_SH=./packaging/docker/run.sh
 
 COPY ${RUN_SH} /run.sh
 
+# Install plugins into a separate directory so the emptyDir mount
+# at /var/lib/grafana does not shadow them at runtime.
+ENV GF_PATHS_PLUGINS=/opt/grafana-plugins
+RUN mkdir -p /opt/grafana-plugins && \
+    grafana-cli --pluginsDir /opt/grafana-plugins plugins install vertamedia-clickhouse-datasource && \
+    grafana-cli --pluginsDir /opt/grafana-plugins plugins install grafana-lokiexplore-app && \
+    grafana-cli --pluginsDir /opt/grafana-plugins plugins install grafana-metricsdrilldown-app && \
+    grafana-cli --pluginsDir /opt/grafana-plugins plugins install grafana-pyroscope-app && \
+    grafana-cli --pluginsDir /opt/grafana-plugins plugins install grafana-exploretraces-app && \
+    chown -R "$GF_UID:0" /opt/grafana-plugins
+
 USER "$GF_UID"
 ENTRYPOINT [ "/run.sh" ]
