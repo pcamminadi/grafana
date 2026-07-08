@@ -11,6 +11,8 @@ export const TABLE = {
   CELL_PADDING: 6,
   LINE_HEIGHT: 22,
   MAX_CELL_HEIGHT: 48,
+  // Hand-measured. Pagination height is 30px, plus 8px top margin.
+  PAGINATION_HEIGHT: 38,
   PAGINATION_LIMIT: 750,
   SCROLL_BAR_WIDTH: 8,
   SCROLL_BAR_MARGIN: 2,

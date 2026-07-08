@@ -69,6 +69,14 @@ export interface PanelContext {
    */
   onOpenInspector?: () => void;
 
+  /**
+   * Called when a panel wants the dashboard layout to resize its container so
+   * that the panel body has the requested content height.
+   *
+   * @alpha -- experimental
+   */
+  onRequestContentHeight?: (height: number, currentHeight?: number) => void;
+
   /** For instance state that can be shared between panel & options UI  */
   instanceState?: any;
 

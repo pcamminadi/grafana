@@ -1,9 +1,17 @@
 import { AnnotationChangeEvent, type AnnotationEventUIModel, CoreApp, type DataFrame } from '@grafana/data';
 import { getDataSourceSrv, reportInteraction } from '@grafana/runtime';
-import { AdHocFiltersVariable, dataLayers, sceneGraph, sceneUtils, type VizPanel } from '@grafana/scenes';
+import {
+  AdHocFiltersVariable,
+  dataLayers,
+  SceneGridLayout,
+  sceneGraph,
+  sceneUtils,
+  type VizPanel,
+} from '@grafana/scenes';
 import { type DataSourceRef } from '@grafana/schema';
 import { type AdHocFilterItem, type PanelContext } from '@grafana/ui';
 import { FILTER_OUT_OPERATOR } from '@grafana/ui/internal';
+import { GRID_CELL_HEIGHT } from 'app/core/constants';
 import { annotationServer } from 'app/features/annotations/api';
 import { InspectTab } from 'app/features/inspector/types';
 
@@ -213,12 +221,60 @@ export function setDashboardPanelContext(vizPanel: VizPanel, context: PanelConte
     return Promise.resolve(true);
   };
 
+  context.onRequestContentHeight = (requestedHeight: number, currentHeight?: number) => {
+    if (requestedHeight <= 0 || context.app === CoreApp.PanelEditor) {
+      return;
+    }
+
+    const gridItem = vizPanel.parent;
+    const layout = sceneGraph.getAncestor(vizPanel, SceneGridLayout);
+
+    if (!isResizableGridItem(gridItem) || !gridItem.state.height || gridItem.state.y === undefined || !layout) {
+      return;
+    }
+
+    const contentHeight = currentHeight ?? requestedHeight;
+    const rowDelta = Math.round((requestedHeight - contentHeight) / GRID_CELL_HEIGHT);
+    if (rowDelta === 0) {
+      return;
+    }
+
+    const previousHeight = gridItem.state.height;
+    const nextHeight = Math.max(1, previousHeight + rowDelta);
+    const appliedDelta = nextHeight - previousHeight;
+    if (appliedDelta === 0) {
+      return;
+    }
+
+    gridItem.setState({ height: nextHeight });
+    layout.adjustYPositions(gridItem.state.y, appliedDelta);
+    layout.forceRender();
+  };
+
   // Only wire up the status-popover inspector opener when the new panel errors UI is enabled.
   // Its presence is also the signal the panel renderer uses to show the new errors/notices popover.
   // Opening goes through a registered opener to avoid importing PanelInspectDrawer here (circular dep).
   if (isNewPanelQueryErrorsUIEnabled()) {
     context.onOpenInspector = () => openPanelInspector(vizPanel, InspectTab.ErrorsAndNotices);
   }
+}
+
+interface ResizableGridItem {
+  state: {
+    height?: number;
+    y?: number;
+  };
+  setState: (state: { height: number }) => void;
+}
+
+function isResizableGridItem(gridItem: unknown): gridItem is ResizableGridItem {
+  return Boolean(
+    gridItem &&
+      typeof gridItem === 'object' &&
+      'state' in gridItem &&
+      'setState' in gridItem &&
+      typeof gridItem.setState === 'function'
+  );
 }
 
 /**

@@ -36,6 +36,15 @@ composableKinds: PanelCfg: {
 					sortBy?: [...ui.TableSortByFieldState]
 					// Enable pagination on the table
 					enablePagination?: bool
+					// Automatically resize the dashboard panel to fit a bounded number of table rows when pagination is enabled
+					autoHeight?: {
+						// Enables automatic dashboard panel height for this table
+						enabled?: bool | *false
+						// Minimum number of visible rows to reserve space for
+						minRows?: int | *5
+						// Maximum number of visible rows to reserve space for
+						maxRows?: int | *20
+					}
 					// Controls the height of the rows
 					cellHeight?: ui.TableCellHeight & (*"sm" | _)
 					// limits the maximum height of a row, if text wrapping or dynamic height is enabled

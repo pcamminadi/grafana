@@ -66,6 +66,8 @@ export {
 } from '../components/Table/types';
 export { defaultSparklineCellConfig } from '../components/Table/Cells/SparklineCell';
 export { TableCell } from '../components/Table/Cells/TableCell';
+export { TABLE } from '../components/Table/TableNG/constants';
+export { getDefaultRowHeight } from '../components/Table/TableNG/utils';
 export { useTableStyles } from '../components/Table/TableRT/styles';
 export { migrateTableDisplayModeToCellOptions } from '../components/Table/cellUtils';
 export {

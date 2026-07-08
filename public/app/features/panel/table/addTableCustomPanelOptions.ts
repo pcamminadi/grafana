@@ -52,5 +52,38 @@ export const addTableCustomPanelOptions = <O extends TableOptions>(builder: Pane
       category,
       editor: PaginationEditor,
       defaultValue: defaultTableOptions?.enablePagination,
+    })
+    .addBooleanSwitch({
+      path: 'autoHeight.enabled',
+      name: t('table.name-auto-panel-height', 'Auto panel height'),
+      description: t(
+        'table.description-auto-panel-height',
+        'Resize the dashboard panel to fit a bounded number of visible rows when pagination is enabled'
+      ),
+      category,
+      defaultValue: false,
+      showIf: (options) => Boolean(options.enablePagination),
+    })
+    .addNumberInput({
+      path: 'autoHeight.minRows',
+      name: t('table.name-auto-panel-height-min-rows', 'Minimum visible rows'),
+      category,
+      defaultValue: 5,
+      settings: {
+        min: 1,
+        integer: true,
+      },
+      showIf: (options) => Boolean(options.enablePagination && options.autoHeight?.enabled),
+    })
+    .addNumberInput({
+      path: 'autoHeight.maxRows',
+      name: t('table.name-auto-panel-height-max-rows', 'Maximum visible rows'),
+      category,
+      defaultValue: 20,
+      settings: {
+        min: 1,
+        integer: true,
+      },
+      showIf: (options) => Boolean(options.enablePagination && options.autoHeight?.enabled),
     });
 };

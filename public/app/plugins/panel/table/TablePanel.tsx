@@ -1,5 +1,5 @@
 import { css } from '@emotion/css';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
 import {
   type ActionModel,
@@ -17,7 +17,7 @@ import { config, PanelDataErrorView } from '@grafana/runtime';
 import { useFlagTableProtoRowParser, useFlagTableRefactorNested } from '@grafana/runtime/internal';
 import { type MatcherScope } from '@grafana/schema';
 import { Combobox, usePanelContext, useTheme2 } from '@grafana/ui';
-import { type TableSortByFieldState } from '@grafana/ui/internal';
+import { getDefaultRowHeight, TABLE, type TableSortByFieldState } from '@grafana/ui/internal';
 import { TableNG } from '@grafana/ui/unstable';
 import { getConfig } from 'app/core/config';
 import { getActions } from 'app/features/actions/utils';
@@ -68,16 +68,58 @@ export function TablePanel(props: Props) {
   const main = frames[currentIndex];
 
   let tableHeight = height;
-
-  if (!count || !hasFields) {
-    return <PanelDataErrorView panelId={id} fieldConfig={fieldConfig} data={data} />;
-  }
+  let datasetSelectorHeight = 0;
 
   if (count > 1) {
     const inputHeight = theme.spacing.gridSize * theme.components.height.md;
     const padding = theme.spacing.gridSize;
 
-    tableHeight = height - inputHeight - padding;
+    datasetSelectorHeight = inputHeight + padding;
+    tableHeight = height - datasetSelectorHeight;
+  }
+
+  useEffect(() => {
+    const autoHeight = options.autoHeight;
+
+    if (
+      !count ||
+      !hasFields ||
+      !main ||
+      !autoHeight?.enabled ||
+      !options.enablePagination ||
+      !panelContext.onRequestContentHeight
+    ) {
+      return;
+    }
+
+    const rowHeight = getDefaultRowHeight(theme, main.fields, options.cellHeight);
+    if (typeof rowHeight !== 'number') {
+      return;
+    }
+
+    const minRows = Math.max(1, autoHeight.minRows ?? 5);
+    const maxRows = Math.max(minRows, autoHeight.maxRows ?? 20);
+    const visibleRows = Math.min(maxRows, Math.max(minRows, main.length));
+    const headerHeight = options.showHeader === false ? 0 : TABLE.HEADER_HEIGHT;
+    const requestedHeight = headerHeight + visibleRows * rowHeight + TABLE.PAGINATION_HEIGHT + datasetSelectorHeight;
+
+    panelContext.onRequestContentHeight(requestedHeight, height);
+  }, [
+    count,
+    datasetSelectorHeight,
+    hasFields,
+    height,
+    main,
+    options.autoHeight,
+    options.cellHeight,
+    options.enablePagination,
+    options.showHeader,
+    panelContext,
+    theme,
+  ]);
+
+  if (!count || !hasFields) {
+    return <PanelDataErrorView panelId={id} fieldConfig={fieldConfig} data={data} />;
   }
 
   const enableSharedCrosshair = panelContext.sync && panelContext.sync() !== DashboardCursorSync.Off;

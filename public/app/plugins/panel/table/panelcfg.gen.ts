@@ -17,6 +17,23 @@ import * as ui from '@grafana/schema';
  */
 export interface Options {
   /**
+   * Automatically resize the dashboard panel to fit a bounded number of table rows when pagination is enabled
+   */
+  autoHeight?: {
+    /**
+     * Enables automatic dashboard panel height for this table
+     */
+    enabled?: boolean;
+    /**
+     * Maximum number of visible rows to reserve space for
+     */
+    maxRows?: number;
+    /**
+     * Minimum number of visible rows to reserve space for
+     */
+    minRows?: number;
+  };
+  /**
    * Controls the height of the rows
    */
   cellHeight?: ui.TableCellHeight;
